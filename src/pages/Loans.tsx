@@ -1,3 +1,4 @@
+import { useState } from "react";
 import Layout from "@/components/Layout";
 import {
   Table,
@@ -12,12 +13,10 @@ import { Button } from "@/components/ui/button";
 import {
   Search,
   Plus,
-  Filter,
   MoreHorizontal,
   RotateCcw,
-  Clock,
   CheckCircle2,
-  Eye,
+  Loader2,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -25,8 +24,14 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
-  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "react-router-dom";
 import {
@@ -37,51 +42,46 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
+import { useIssues, useRenew, useReturn } from "@/hooks/api/use-circulation";
+import { DEFAULT_PAGE_SIZE } from "@/api/constants";
+import { useToast } from "@/hooks/use-toast";
 
-const loans = [
-  {
-    id: "LN-8401",
-    book: "The Great Gatsby",
-    borrower: "John Doe",
-    issueDate: "2024-03-01",
-    dueDate: "2024-03-15",
-    status: "Active",
-  },
-  {
-    id: "LN-8402",
-    book: "1984",
-    borrower: "Jane Smith",
-    issueDate: "2024-02-15",
-    dueDate: "2024-03-01",
-    status: "Overdue",
-  },
-  {
-    id: "LN-8403",
-    book: "The Hobbit",
-    borrower: "Alice Johnson",
-    issueDate: "2024-03-05",
-    dueDate: "2024-03-19",
-    status: "Active",
-  },
-  {
-    id: "LN-8404",
-    book: "Brave New World",
-    borrower: "Michael Wilson",
-    issueDate: "2024-03-10",
-    dueDate: "2024-03-24",
-    status: "Active",
-  },
-  {
-    id: "LN-8405",
-    book: "To Kill a Mockingbird",
-    borrower: "Robert Brown",
-    issueDate: "2024-02-10",
-    dueDate: "2024-02-24",
-    status: "Returned",
-  },
-];
+function isOverdue(dueDate: string, status: string) {
+  return status === "Active" && new Date(dueDate).getTime() < Date.now();
+}
 
 export default function Loans() {
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState<string>("Active");
+  const { toast } = useToast();
+
+  const { data, isLoading, isError, error } = useIssues({
+    page,
+    pageSize: DEFAULT_PAGE_SIZE,
+    ...(status !== "All" ? { status } : {}),
+    ...(search.trim() ? { seed: search.trim() } : {}),
+  });
+
+  const onActionError = (err: any) =>
+    toast({
+      title: "Action failed",
+      description: err.response?.data?.error ?? err.message,
+      variant: "destructive",
+    });
+
+  const { mutate: renew, isPending: isRenewing } = useRenew({
+    onSuccess: () => toast({ title: "Loan renewed" }),
+    onError: onActionError,
+  });
+  const { mutate: returnBook, isPending: isReturning } = useReturn({
+    onSuccess: () => toast({ title: "Book returned" }),
+    onError: onActionError,
+  });
+
+  const loans = data?.data ?? [];
+  const lastPage = data?.info?.lastPage ?? 1;
+
   return (
     <Layout>
       <div className="flex flex-col gap-8">
@@ -93,32 +93,45 @@ export default function Loans() {
               Track borrowed books, manage return dates, and handle overdue items.
             </p>
           </div>
-          <Button className="gap-2">
-            <Plus className="h-4 w-4" />
-            New Loan Request
+          <Button className="gap-2" asChild>
+            <Link to="/loans/new">
+              <Plus className="h-4 w-4" />
+              New Physical Loan
+            </Link>
           </Button>
         </div>
 
         {/* Filters & Search */}
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div className="relative w-full max-sm md:max-w-sm">
+          <div className="relative w-full md:max-w-sm">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               type="search"
               placeholder="Search by book or borrower..."
               className="pl-9"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
             />
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" className="gap-2">
-              <Filter className="h-4 w-4" />
-              Status
-            </Button>
-            <Button variant="outline" size="sm" className="gap-2">
-              <Clock className="h-4 w-4" />
-              History
-            </Button>
-          </div>
+          <Select
+            value={status}
+            onValueChange={(value) => {
+              setStatus(value);
+              setPage(1);
+            }}
+          >
+            <SelectTrigger className="w-[160px]">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Active">Active</SelectItem>
+              <SelectItem value="Returned">Returned</SelectItem>
+              <SelectItem value="All">All</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Loan Table */}
@@ -126,88 +139,138 @@ export default function Loans() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[100px]">Loan ID</TableHead>
                 <TableHead>Book Title</TableHead>
                 <TableHead>Borrower</TableHead>
                 <TableHead>Issue Date</TableHead>
                 <TableHead>Due Date</TableHead>
+                <TableHead>Renewals</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loans.map((loan) => (
-                <TableRow key={loan.id}>
-                  <TableCell className="font-mono text-xs">{loan.id}</TableCell>
-                  <TableCell className="font-medium">{loan.book}</TableCell>
-                  <TableCell>{loan.borrower}</TableCell>
-                  <TableCell>{loan.issueDate}</TableCell>
-                  <TableCell>{loan.dueDate}</TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={
-                        loan.status === "Overdue"
-                          ? "destructive"
-                          : loan.status === "Returned"
-                          ? "secondary"
-                          : "default"
-                      }
-                      className={
-                        loan.status === "Active"
-                          ? "bg-blue-100 text-blue-700 hover:bg-blue-100"
-                          : loan.status === "Returned"
-                          ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-none"
-                          : ""
-                      }
-                    >
-                      {loan.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                          <MoreHorizontal className="h-4 w-4" />
-                          <span className="sr-only">Actions</span>
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        {loan.status !== "Returned" && (
-                          <DropdownMenuItem className="gap-2 text-emerald-600">
-                            <CheckCircle2 className="h-4 w-4" /> Return Book
-                          </DropdownMenuItem>
-                        )}
-                        <DropdownMenuItem className="gap-2">
-                          <RotateCcw className="h-4 w-4" /> Renew Loan
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem className="gap-2" asChild>
-                          <Link to={`/loans/${loan.id}`}>
-                            <Eye className="h-4 w-4" /> View Details
-                          </Link>
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+              {isLoading && (
+                <TableRow>
+                  <TableCell colSpan={7} className="h-32 text-center">
+                    <Loader2 className="mx-auto h-6 w-6 animate-spin text-muted-foreground" />
                   </TableCell>
                 </TableRow>
-              ))}
+              )}
+              {isError && (
+                <TableRow>
+                  <TableCell colSpan={7} className="h-32 text-center text-destructive">
+                    Failed to load loans{error?.message ? `: ${error.message}` : "."}
+                  </TableCell>
+                </TableRow>
+              )}
+              {!isLoading && !isError && loans.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
+                    No loans found.
+                  </TableCell>
+                </TableRow>
+              )}
+              {loans.map((loan) => {
+                const overdue = isOverdue(loan.dueDate, loan.status);
+                return (
+                  <TableRow key={loan.issueId}>
+                    <TableCell className="font-medium">
+                      {loan.book?.bookInfo?.title ?? loan.bookId}
+                    </TableCell>
+                    <TableCell>{loan.user?.fullName ?? loan.userId}</TableCell>
+                    <TableCell>
+                      {loan.checkInDate ? new Date(loan.checkInDate).toLocaleDateString() : "—"}
+                    </TableCell>
+                    <TableCell>
+                      {loan.dueDate ? new Date(loan.dueDate).toLocaleDateString() : "—"}
+                    </TableCell>
+                    <TableCell>{loan.renewalCount}</TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={
+                          overdue
+                            ? "destructive"
+                            : loan.status === "Returned"
+                              ? "secondary"
+                              : "default"
+                        }
+                        className={
+                          overdue
+                            ? ""
+                            : loan.status === "Active"
+                              ? "bg-blue-100 text-blue-700 hover:bg-blue-100"
+                              : loan.status === "Returned"
+                                ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-none"
+                                : ""
+                        }
+                      >
+                        {overdue ? "Overdue" : loan.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" disabled={isRenewing || isReturning}>
+                            <MoreHorizontal className="h-4 w-4" />
+                            <span className="sr-only">Actions</span>
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                          {loan.status === "Active" && (
+                            <>
+                              <DropdownMenuItem
+                                className="gap-2 text-emerald-600"
+                                onSelect={() => returnBook({ issueId: loan.issueId })}
+                              >
+                                <CheckCircle2 className="h-4 w-4" /> Return Book
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="gap-2"
+                                onSelect={() => renew({ issueId: loan.issueId })}
+                              >
+                                <RotateCcw className="h-4 w-4" /> Renew Loan
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                          {loan.status !== "Active" && (
+                            <DropdownMenuItem disabled>No actions available</DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
           <div className="p-4 border-t bg-slate-50/30">
             <Pagination>
               <PaginationContent>
                 <PaginationItem>
-                  <PaginationPrevious href="#" />
+                  <PaginationPrevious
+                    href="#"
+                    className={page <= 1 ? "pointer-events-none opacity-50" : ""}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setPage((p) => Math.max(1, p - 1));
+                    }}
+                  />
                 </PaginationItem>
                 <PaginationItem>
-                  <PaginationLink href="#" isActive>1</PaginationLink>
+                  <PaginationLink href="#" isActive onClick={(e) => e.preventDefault()}>
+                    {page}
+                  </PaginationLink>
                 </PaginationItem>
                 <PaginationItem>
-                  <PaginationLink href="#">2</PaginationLink>
-                </PaginationItem>
-                <PaginationItem>
-                  <PaginationNext href="#" />
+                  <PaginationNext
+                    href="#"
+                    className={page >= lastPage ? "pointer-events-none opacity-50" : ""}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setPage((p) => Math.min(lastPage, p + 1));
+                    }}
+                  />
                 </PaginationItem>
               </PaginationContent>
             </Pagination>

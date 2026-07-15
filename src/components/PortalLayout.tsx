@@ -1,4 +1,7 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useMe, useLogout } from "@/hooks/api/use-auth";
+import { useNotificationCount } from "@/hooks/api/use-notifications";
+import { resUrl } from "@/api/entities";
 import { 
   Home, 
   Search as SearchIcon, 
@@ -10,7 +13,7 @@ import {
   User, 
   LogOut,
   Menu,
-  BookOpen
+  BookPlus
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -24,6 +27,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import pcpsLogo from "@/assets/pcpsLogo.png";
 
 const navItems = [
   { title: "Dashboard", url: "/portal", icon: Home },
@@ -31,10 +35,23 @@ const navItems = [
   { title: "My Loans", url: "/portal/loans", icon: History },
   { title: "Reservations", url: "/portal/reservations", icon: Calendar },
   { title: "Fines & History", url: "/portal/fines", icon: Receipt },
+  { title: "Request a Book", url: "/portal/request-book", icon: BookPlus },
 ];
 
 export default function PortalLayout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { data: me } = useMe();
+  const { data: notificationCount } = useNotificationCount();
+  const { mutate: logout } = useLogout(() => navigate("/login", { replace: true }));
+
+  const user = me?.data;
+  const initials = user?.fullName
+    ?.split(" ")
+    .map((part) => part[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F8FAFC]">
@@ -43,9 +60,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
         <div className="container flex h-16 items-center justify-between px-4">
           <div className="flex items-center gap-6">
             <Link to="/portal" className="flex items-center gap-2">
-              <div className="bg-primary/10 p-1.5 rounded-lg">
-                <BookOpen className="h-6 w-6 text-primary" />
-              </div>
+              <img src={pcpsLogo} alt="PCPS College" className="h-9 w-9 rounded-lg object-contain bg-white p-0.5 shadow-sm" />
               <span className="text-xl font-bold tracking-tight text-slate-900 hidden sm:block">StudentLib</span>
             </Link>
             
@@ -75,25 +90,31 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
               />
             </div>
 
-            <Button variant="ghost" size="icon" className="relative text-slate-600 rounded-full">
-              <Bell className="h-5 w-5" />
-              <span className="absolute top-2 right-2 h-2 w-2 bg-destructive rounded-full border-2 border-white" />
+            <Button variant="ghost" size="icon" className="relative text-slate-600 rounded-full" asChild>
+              <Link to="/portal/notifications">
+                <Bell className="h-5 w-5" />
+                {(notificationCount?.count ?? 0) > 0 && (
+                  <span className="absolute top-1 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-medium text-white border border-white">
+                    {notificationCount!.count > 99 ? "99+" : notificationCount!.count}
+                  </span>
+                )}
+              </Link>
             </Button>
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="rounded-full ring-offset-2 hover:ring-2 hover:ring-primary/20 transition-all">
                   <Avatar className="h-8 w-8">
-                    <AvatarImage src="/placeholder.svg" />
-                    <AvatarFallback>ST</AvatarFallback>
+                    <AvatarImage src={resUrl(user?.profilePicUrl)} />
+                    <AvatarFallback>{initials || "ST"}</AvatarFallback>
                   </Avatar>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56 mt-2 rounded-xl">
                 <DropdownMenuLabel className="font-normal">
                   <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium leading-none">Student User</p>
-                    <p className="text-xs leading-none text-muted-foreground">st2024@college.edu</p>
+                    <p className="text-sm font-medium leading-none">{user?.fullName ?? "Student"}</p>
+                    <p className="text-xs leading-none text-muted-foreground">{user?.email ?? ""}</p>
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
@@ -108,7 +129,10 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-destructive focus:bg-destructive/10 flex items-center gap-2">
+                <DropdownMenuItem
+                  className="text-destructive focus:bg-destructive/10 flex items-center gap-2"
+                  onSelect={() => logout()}
+                >
                   <LogOut className="h-4 w-4" /> Log out
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -126,7 +150,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
                 <SheetDescription className="sr-only">Navigation menu for the student portal</SheetDescription>
                 <div className="flex flex-col gap-6 py-4">
                   <Link to="/portal" className="flex items-center gap-2 px-2">
-                    <BookOpen className="h-6 w-6 text-primary" />
+                    <img src={pcpsLogo} alt="PCPS College" className="h-8 w-8 rounded-lg object-contain bg-white p-0.5 shadow-sm" />
                     <span className="text-xl font-bold">StudentLib</span>
                   </Link>
                   <nav className="flex flex-col gap-1">

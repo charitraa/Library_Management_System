@@ -6,10 +6,13 @@ import {
   CalendarCheck,
   Receipt,
   Bell,
-  BarChart3,
-  Settings,
   Library,
-  History,
+  BookOpen,
+  MessageSquareText,
+  AlertTriangle,
+  ShoppingCart,
+  UserCheck,
+  Tags,
 } from "lucide-react";
 import {
   Sidebar,
@@ -23,6 +26,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { Link, useLocation } from "react-router-dom";
+import pcpsLogo from "@/assets/pcpsLogo.png";
 
 const items = [
   {
@@ -65,20 +69,38 @@ const items = [
     url: "/notifications",
     icon: Bell,
   },
+];
+
+const catalogItems = [
   {
-    title: "Analytics",
-    url: "/analytics",
-    icon: BarChart3,
+    title: "Online Books",
+    url: "/online-books",
+    icon: BookOpen,
   },
   {
-    title: "Audit Logs",
-    url: "/audit-logs",
-    icon: History,
+    title: "Book Requests",
+    url: "/book-requests",
+    icon: MessageSquareText,
   },
   {
-    title: "Settings",
-    url: "/settings",
-    icon: Settings,
+    title: "Lost Books",
+    url: "/lost-books",
+    icon: AlertTriangle,
+  },
+  {
+    title: "Purchase Entries",
+    url: "/purchase-entries",
+    icon: ShoppingCart,
+  },
+  {
+    title: "Enrollments",
+    url: "/enrollments",
+    icon: UserCheck,
+  },
+  {
+    title: "Attributes",
+    url: "/attributes",
+    icon: Tags,
   },
 ];
 
@@ -89,9 +111,11 @@ export function AppSidebar() {
     <Sidebar>
       <SidebarHeader className="p-4">
         <div className="flex items-center gap-2 px-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <Library className="h-5 w-5" />
-          </div>
+          <img
+            src={pcpsLogo}
+            alt="PCPS College"
+            className="h-8 w-8 rounded-lg object-contain bg-white"
+          />
           <span className="text-xl font-bold tracking-tight">LibAdmin</span>
         </div>
       </SidebarHeader>
@@ -101,6 +125,27 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {items.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={location.pathname === item.url}
+                    tooltip={item.title}
+                  >
+                    <Link to={item.url}>
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.title}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+        <SidebarGroup>
+          <SidebarGroupLabel>Catalog & Members</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {catalogItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     asChild

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import Layout from "@/components/Layout";
 import {
   Card,
@@ -16,19 +17,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import {
-  ArrowLeft,
-  Plus,
-  Trash2,
-  Edit,
-  History,
-  QrCode,
-  CheckCircle2,
-  AlertCircle,
-  Clock,
-  ChevronLeft,
-  ChevronRight,
-} from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Loader2, BookMarked } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -40,94 +29,99 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from "@/components/ui/pagination";
+  useAddCopies,
+  useBookCopies,
+  useBookInfo,
+  useDeleteCopy,
+  BookCopyRow,
+} from "@/hooks/api/use-books";
 
-const mockCopies = [
-  {
-    id: "CP-001-A",
-    barcode: "1002231-A",
-    status: "Available",
-    condition: "Excellent",
-    location: "Shelf A-12",
-    lastChecked: "2024-05-10",
-  },
-  {
-    id: "CP-001-B",
-    barcode: "1002231-B",
-    status: "On Loan",
-    condition: "Good",
-    location: "N/A",
-    lastChecked: "2024-05-15",
-    dueDate: "2024-06-05",
-  },
-  {
-    id: "CP-001-C",
-    barcode: "1002231-C",
-    status: "Available",
-    condition: "Excellent",
-    location: "Shelf A-12",
-    lastChecked: "2024-05-12",
-  },
-  {
-    id: "CP-001-D",
-    barcode: "1002231-D",
-    status: "Damaged",
-    condition: "Poor",
-    location: "Repair Bin",
-    lastChecked: "2024-05-01",
-  },
-  {
-    id: "CP-001-E",
-    barcode: "1002231-E",
-    status: "Reserved",
-    condition: "New",
-    location: "Hold Shelf",
-    lastChecked: "2024-05-18",
-  },
-];
+function getStatusBadge(status: string) {
+  switch (status) {
+    case "Available":
+      return <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200">Available</Badge>;
+    case "Issued":
+    case "On Loan":
+      return <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200">Issued</Badge>;
+    case "Damaged":
+    case "Lost":
+      return <Badge className="bg-red-50 text-red-700 hover:bg-red-100 border-red-200">{status}</Badge>;
+    case "Reserved":
+      return <Badge className="bg-amber-50 text-amber-700 hover:bg-amber-100 border-amber-200">Reserved</Badge>;
+    default:
+      return <Badge variant="outline">{status}</Badge>;
+  }
+}
 
 const ManageCopies = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "Available":
-        return <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200">Available</Badge>;
-      case "On Loan":
-        return <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200">On Loan</Badge>;
-      case "Damaged":
-        return <Badge className="bg-red-50 text-red-700 hover:bg-red-100 border-red-200">Damaged</Badge>;
-      case "Reserved":
-        return <Badge className="bg-amber-50 text-amber-700 hover:bg-amber-100 border-amber-200">Reserved</Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
+  const { data: book } = useBookInfo(id);
+  const { data: copies, isLoading, isError, error } = useBookCopies(id);
+
+  const [addOpen, setAddOpen] = useState(false);
+  const [barcodesInput, setBarcodesInput] = useState("");
+  const [pricePerPiece, setPricePerPiece] = useState("");
+  const [copyToDelete, setCopyToDelete] = useState<BookCopyRow | null>(null);
+
+  const { mutate: addCopies, isPending: isAdding } = useAddCopies(() => {
+    toast({ title: "Copies added successfully" });
+    setAddOpen(false);
+    setBarcodesInput("");
+    setPricePerPiece("");
+  });
+
+  const { mutate: deleteCopy, isPending: isDeleting } = useDeleteCopy(() => {
+    toast({ title: "Copy removed" });
+    setCopyToDelete(null);
+  });
+
+  const handleAddCopies = () => {
+    const barcodes = barcodesInput
+      .split(/[,\n]/)
+      .map((b) => b.trim())
+      .filter(Boolean);
+    if (barcodes.length === 0) {
+      toast({ title: "Enter at least one barcode", variant: "destructive" });
+      return;
     }
+    addCopies(
+      {
+        bookInfoId: id!,
+        totalPieces: barcodes.length,
+        pricePerPiece: Number(pricePerPiece || 0),
+        barcodes,
+      },
+      {
+        onError: (err) =>
+          toast({
+            title: "Failed to add copies",
+            description: err.response?.data?.error ?? err.message,
+            variant: "destructive",
+          }),
+      },
+    );
   };
 
-  const handleAddCopy = () => {
-    toast({
-      title: "Copies added successfully",
-      description: "5 new copies have been added to the system.",
-    });
-  };
+  const copyRows = copies ?? [];
+  const availableCount = copyRows.filter((c) => c.status === "Available").length;
+  const issuedCount = copyRows.filter((c) => c.status !== "Available").length;
 
   return (
     <Layout>
@@ -139,64 +133,52 @@ const ManageCopies = () => {
             </Button>
             <div>
               <h1 className="text-3xl font-bold tracking-tight text-slate-900">Manage Copies</h1>
-              <p className="text-muted-foreground mt-1">Book ID: {id || "BK-001"} | Title: The Great Gatsby</p>
+              <p className="text-muted-foreground mt-1">
+                {book?.title ?? "Loading title..."}
+              </p>
             </div>
           </div>
-          <Dialog>
+          <Dialog open={addOpen} onOpenChange={setAddOpen}>
             <DialogTrigger asChild>
               <Button className="gap-2">
                 <Plus className="h-4 w-4" />
-                Add New Copy
+                Add New Copies
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[425px]">
               <DialogHeader>
                 <DialogTitle>Add New Copies</DialogTitle>
                 <DialogDescription>
-                  Enter the details for the new physical copies of this book.
+                  Enter one barcode per new physical copy of this book.
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="num-copies" className="text-right">
-                    Quantity
-                  </Label>
-                  <Input
-                    id="num-copies"
-                    type="number"
-                    defaultValue="1"
-                    className="col-span-3"
+                <div className="space-y-2">
+                  <Label htmlFor="barcodes">Barcodes (comma or newline separated)</Label>
+                  <Textarea
+                    id="barcodes"
+                    placeholder={"100001\n100002"}
+                    value={barcodesInput}
+                    onChange={(e) => setBarcodesInput(e.target.value)}
+                    className="min-h-[100px]"
                   />
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="condition" className="text-right">
-                    Condition
-                  </Label>
-                  <Select defaultValue="excellent">
-                    <SelectTrigger className="col-span-3">
-                      <SelectValue placeholder="Select condition" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="excellent">Excellent</SelectItem>
-                      <SelectItem value="good">Good</SelectItem>
-                      <SelectItem value="fair">Fair</SelectItem>
-                      <SelectItem value="poor">Poor</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="location" className="text-right">
-                    Location
-                  </Label>
+                <div className="space-y-2">
+                  <Label htmlFor="price">Price Per Copy</Label>
                   <Input
-                    id="location"
-                    defaultValue="Shelf A-12"
-                    className="col-span-3"
+                    id="price"
+                    type="number"
+                    placeholder="500"
+                    value={pricePerPiece}
+                    onChange={(e) => setPricePerPiece(e.target.value)}
                   />
                 </div>
               </div>
               <DialogFooter>
-                <Button type="submit" onClick={handleAddCopy}>Add Copies</Button>
+                <Button onClick={handleAddCopies} disabled={isAdding}>
+                  {isAdding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Add Copies
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -208,26 +190,23 @@ const ManageCopies = () => {
               <CardTitle className="text-sm font-medium text-muted-foreground">Total Copies</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">5</div>
-              <p className="text-xs text-emerald-600 mt-1">+1 since last month</p>
+              <div className="text-2xl font-bold">{copyRows.length}</div>
             </CardContent>
           </Card>
           <Card className="border-none shadow-sm">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Active Loans</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Available</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">1</div>
-              <p className="text-xs text-muted-foreground mt-1">20% of inventory</p>
+              <div className="text-2xl font-bold">{availableCount}</div>
             </CardContent>
           </Card>
           <Card className="border-none shadow-sm">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Under Maintenance</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Issued / Other</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">1</div>
-              <p className="text-xs text-red-600 mt-1">Requires immediate attention</p>
+              <div className="text-2xl font-bold">{issuedCount}</div>
             </CardContent>
           </Card>
         </div>
@@ -241,82 +220,90 @@ const ManageCopies = () => {
             <Table>
               <TableHeader className="bg-slate-50/50">
                 <TableRow>
-                  <TableHead className="w-[150px]">Copy ID</TableHead>
                   <TableHead>Barcode</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Condition</TableHead>
-                  <TableHead>Location</TableHead>
-                  <TableHead>Last Check</TableHead>
+                  <TableHead>Reference Copy</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {mockCopies.map((copy) => (
-                  <TableRow key={copy.id} className="hover:bg-slate-50/50 transition-colors">
-                    <TableCell className="font-medium text-primary">{copy.id}</TableCell>
+                {isLoading && (
+                  <TableRow>
+                    <TableCell colSpan={4} className="h-32 text-center">
+                      <Loader2 className="mx-auto h-6 w-6 animate-spin text-muted-foreground" />
+                    </TableCell>
+                  </TableRow>
+                )}
+                {isError && (
+                  <TableRow>
+                    <TableCell colSpan={4} className="h-32 text-center text-destructive">
+                      Failed to load copies{error?.message ? `: ${error.message}` : "."}
+                    </TableCell>
+                  </TableRow>
+                )}
+                {!isLoading && !isError && copyRows.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={4} className="h-32 text-center text-muted-foreground">
+                      No physical copies registered.
+                    </TableCell>
+                  </TableRow>
+                )}
+                {copyRows.map((copy) => (
+                  <TableRow key={copy.bookId} className="hover:bg-slate-50/50 transition-colors">
                     <TableCell className="font-mono text-sm">{copy.barcode}</TableCell>
                     <TableCell>{getStatusBadge(copy.status)}</TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-sm">{copy.condition}</span>
-                        {copy.condition === "Excellent" && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />}
-                        {copy.condition === "Poor" && <AlertCircle className="h-3.5 w-3.5 text-red-500" />}
-                      </div>
+                      {copy.isReference ? (
+                        <span className="flex items-center gap-1 text-sm text-amber-700">
+                          <BookMarked className="h-3.5 w-3.5" /> Reference only
+                        </span>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">Circulating</span>
+                      )}
                     </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1.5">
-                        {copy.status === "On Loan" ? (
-                          <div className="flex items-center gap-1 text-slate-500 italic">
-                            <Clock className="h-3.5 w-3.5" />
-                            <span>Due: {copy.dueDate}</span>
-                          </div>
-                        ) : (
-                          <span>{copy.location}</span>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-slate-500 text-sm">{copy.lastChecked}</TableCell>
                     <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-slate-100" title="Edit Condition">
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-slate-100" title="Print Barcode">
-                          <QrCode className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-slate-100" title="Loan History">
-                          <History className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-red-50 text-red-600 hover:text-red-700" title="Remove Copy">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 hover:bg-red-50 text-red-600 hover:text-red-700"
+                        title="Remove Copy"
+                        onClick={() => setCopyToDelete(copy)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
-            <div className="p-4 border-t bg-slate-50/30">
-              <Pagination>
-                <PaginationContent>
-                  <PaginationItem>
-                    <PaginationPrevious href="#" />
-                  </PaginationItem>
-                  <PaginationItem>
-                    <PaginationLink href="#" isActive>1</PaginationLink>
-                  </PaginationItem>
-                  <PaginationItem>
-                    <PaginationLink href="#">2</PaginationLink>
-                  </PaginationItem>
-                  <PaginationItem>
-                    <PaginationNext href="#" />
-                  </PaginationItem>
-                </PaginationContent>
-              </Pagination>
-            </div>
           </CardContent>
         </Card>
       </div>
+
+      <AlertDialog open={!!copyToDelete} onOpenChange={(open) => !open && setCopyToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove copy</AlertDialogTitle>
+            <AlertDialogDescription>
+              Remove copy with barcode “{copyToDelete?.barcode}”? This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={isDeleting}
+              onClick={(e) => {
+                e.preventDefault();
+                if (copyToDelete) deleteCopy(copyToDelete.bookId);
+              }}
+            >
+              {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Layout>
   );
 };

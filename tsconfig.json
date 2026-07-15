@@ -26,6 +26,9 @@
     "strictNullChecks": false,
 
     /* Path mapping */
+    "paths": {
+      "@/*": ["./src/*"]
+    }
   },
   "include": [
     "src/**/*",

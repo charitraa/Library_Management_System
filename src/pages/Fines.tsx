@@ -1,3 +1,4 @@
+import { useState } from "react";
 import Layout from "@/components/Layout";
 import {
   Table,
@@ -10,25 +11,17 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   CreditCard,
-  Download,
-  DollarSign,
   AlertCircle,
   Search,
-  MoreVertical,
   Receipt,
-  Eye,
   CheckCircle2,
+  Loader2,
+  Plus,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Label } from "@/components/ui/label";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
@@ -37,84 +30,144 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
-import { useState } from "react";
 import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from "@/components/ui/pagination";
-import { Separator } from "@/components/ui/separator";
-import { Calendar, User, Book } from "lucide-react";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useUsers } from "@/hooks/api/use-users";
+import {
+  useAddPenalty,
+  useMakePayment,
+  usePaymentHistory,
+  usePenalties,
+  useResolvePenalty,
+} from "@/hooks/api/use-payments";
+import { EPaymentTypes, EPenaltyTypes, resUrl, UserSummary } from "@/api/entities";
 
-const initialFines = [
-  {
-    id: "FIN-1001",
-    user: "John Doe",
-    userId: "USR-001",
-    book: "The Great Gatsby",
-    reason: "Late Return (3 days)",
-    amount: 15.00,
-    status: "Unpaid",
-    date: "2024-03-10",
-  },
-  {
-    id: "FIN-1002",
-    user: "Jane Smith",
-    userId: "USR-005",
-    book: "Introduction to Algorithms",
-    reason: "Damaged Page",
-    amount: 5.50,
-    status: "Paid",
-    date: "2024-03-05",
-  },
-  {
-    id: "FIN-1003",
-    user: "Robert Brown",
-    userId: "USR-012",
-    book: "Atomic Habits",
-    reason: "Lost Book Replacement",
-    amount: 45.00,
-    status: "Unpaid",
-    date: "2024-03-12",
-  },
-  {
-    id: "FIN-1004",
-    user: "Alice Johnson",
-    userId: "USR-008",
-    book: "The Psychology of Money",
-    reason: "Late Return (1 day)",
-    amount: 5.00,
-    status: "Paid",
-    date: "2024-03-01",
-  },
-  {
-    id: "FIN-1005",
-    user: "Michael Chen",
-    userId: "USR-022",
-    book: "Clean Code",
-    reason: "Late Return (5 days)",
-    amount: 25.00,
-    status: "Unpaid",
-    date: "2024-03-15",
-  },
-];
+function initialsOf(name?: string) {
+  return (
+    name
+      ?.split(" ")
+      .map((part) => part[0])
+      .slice(0, 2)
+      .join("")
+      .toUpperCase() || "?"
+  );
+}
 
 export default function Fines() {
   const { toast } = useToast();
-  const [fines, setFines] = useState(initialFines);
-  const [selectedFine, setSelectedFine] = useState<any>(null);
 
-  const handlePayNow = (id: string) => {
-    setFines(fines.map(f => f.id === id ? { ...f, status: "Paid" } : f));
+  const [search, setSearch] = useState("");
+  const [selectedUser, setSelectedUser] = useState<UserSummary | null>(null);
+  const [penaltyPage, setPenaltyPage] = useState(1);
+  const [paymentPage, setPaymentPage] = useState(1);
+
+  const [addPenaltyOpen, setAddPenaltyOpen] = useState(false);
+  const [penaltyForm, setPenaltyForm] = useState({
+    barcode: "",
+    description: "",
+    amount: "",
+    penaltyType: EPenaltyTypes.Overdue as EPenaltyTypes,
+  });
+
+  const [paymentOpen, setPaymentOpen] = useState(false);
+  const [paymentForm, setPaymentForm] = useState({
+    amountPaid: "",
+    paymentType: EPaymentTypes.Penalty as EPaymentTypes,
+  });
+
+  const { data: usersData, isFetching: isSearching } = useUsers({
+    page: 1,
+    pageSize: 8,
+    ...(search.trim() ? { seed: search.trim() } : {}),
+  });
+
+  const userId = selectedUser?.userId;
+  const { data: penalties, isLoading: isLoadingPenalties } = usePenalties({
+    userId,
+    page: penaltyPage,
+    pageSize: 10,
+  });
+  const { data: payments, isLoading: isLoadingPayments } = usePaymentHistory({
+    userId,
+    page: paymentPage,
+    pageSize: 10,
+  });
+
+  const { mutate: addPenalty, isPending: isAddingPenalty } = useAddPenalty();
+  const { mutate: resolvePenalty, isPending: isResolving } = useResolvePenalty();
+  const { mutate: makePayment, isPending: isPaying } = useMakePayment();
+
+  const penaltyRows = penalties?.data ?? [];
+  const paymentRows = payments?.data ?? [];
+  const pendingTotal = penaltyRows
+    .filter((p) => p.status === "Pending")
+    .reduce((sum, p) => sum + Number(p.amount ?? 0), 0);
+  const paidTotal = paymentRows.reduce((sum, p) => sum + Number(p.amountPaid ?? 0), 0);
+
+  const onError = (err: any) =>
     toast({
-      title: "Payment Successful",
-      description: `Fine ${id} has been marked as paid.`,
+      title: "Action failed",
+      description: err.response?.data?.error ?? err.message,
+      variant: "destructive",
     });
+
+  const submitPenalty = () => {
+    if (!userId) return;
+    if (!penaltyForm.description.trim() || !penaltyForm.amount) {
+      toast({ title: "Description and amount are required", variant: "destructive" });
+      return;
+    }
+    addPenalty(
+      {
+        userId,
+        body: {
+          barcode: penaltyForm.barcode,
+          description: penaltyForm.description,
+          amount: Number(penaltyForm.amount),
+          penaltyType: penaltyForm.penaltyType,
+        },
+      },
+      {
+        onSuccess: () => {
+          toast({ title: "Penalty added" });
+          setAddPenaltyOpen(false);
+          setPenaltyForm({ barcode: "", description: "", amount: "", penaltyType: EPenaltyTypes.Overdue });
+        },
+        onError,
+      },
+    );
+  };
+
+  const submitPayment = () => {
+    if (!userId) return;
+    if (!paymentForm.amountPaid) {
+      toast({ title: "Amount is required", variant: "destructive" });
+      return;
+    }
+    makePayment(
+      {
+        userId,
+        body: {
+          amountPaid: Number(paymentForm.amountPaid),
+          paymentType: paymentForm.paymentType,
+        },
+      },
+      {
+        onSuccess: () => {
+          toast({ title: "Payment recorded" });
+          setPaymentOpen(false);
+          setPaymentForm({ amountPaid: "", paymentType: EPaymentTypes.Penalty });
+        },
+        onError,
+      },
+    );
   };
 
   return (
@@ -128,237 +181,334 @@ export default function Fines() {
               Monitor outstanding fines, record payments, and manage financial records.
             </p>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" className="gap-2">
-              <Download className="h-4 w-4" />
-              Export Records
-            </Button>
-            <Button className="gap-2">
-              <Receipt className="h-4 w-4" />
-              Generate Report
-            </Button>
-          </div>
+          {selectedUser && (
+            <div className="flex gap-2">
+              <Button variant="outline" className="gap-2" onClick={() => setAddPenaltyOpen(true)}>
+                <Plus className="h-4 w-4" />
+                Add Penalty
+              </Button>
+              <Button className="gap-2" onClick={() => setPaymentOpen(true)}>
+                <CreditCard className="h-4 w-4" />
+                Record Payment
+              </Button>
+            </div>
+          )}
         </div>
 
-        <div className="grid gap-6 md:grid-cols-3">
-          <div className="rounded-xl border bg-card p-6 flex items-center gap-4 shadow-sm">
-            <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
-              <DollarSign className="h-6 w-6 text-blue-600" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-muted-foreground">Total Revenue</p>
-              <h3 className="text-2xl font-bold">$4,250.00</h3>
-            </div>
-          </div>
-          <div className="rounded-xl border bg-card p-6 flex items-center gap-4 shadow-sm">
-            <div className="h-12 w-12 rounded-full bg-amber-100 flex items-center justify-center">
-              <AlertCircle className="h-6 w-6 text-amber-600" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-muted-foreground">Outstanding Fines</p>
-              <h3 className="text-2xl font-bold text-amber-600">$85.00</h3>
-            </div>
-          </div>
-          <div className="rounded-xl border bg-card p-6 flex items-center gap-4 shadow-sm">
-            <div className="h-12 w-12 rounded-full bg-emerald-100 flex items-center justify-center">
-              <CheckCircle2 className="h-6 w-6 text-emerald-600" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-muted-foreground">Collection Rate</p>
-              <h3 className="text-2xl font-bold text-emerald-600">98.2%</h3>
-            </div>
-          </div>
-        </div>
-
-        {/* Filters and Search */}
-        <div className="flex items-center gap-4">
-          <div className="relative flex-1">
+        {/* Member picker */}
+        <div className="rounded-lg border bg-card p-4 space-y-4">
+          <div className="relative max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Search by user, book or fine ID..." className="pl-10 max-w-md" />
+            <Input
+              placeholder="Search member by name or card ID..."
+              className="pl-10"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
           </div>
-          <Button variant="outline">Filter</Button>
+          <div className="flex flex-wrap gap-2">
+            {isSearching && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+            {(usersData?.data ?? []).map((user) => (
+              <button
+                key={user.userId}
+                onClick={() => {
+                  setSelectedUser(user);
+                  setPenaltyPage(1);
+                  setPaymentPage(1);
+                }}
+                className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-colors ${
+                  selectedUser?.userId === user.userId
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "hover:bg-muted"
+                }`}
+              >
+                <Avatar className="h-5 w-5">
+                  <AvatarImage src={resUrl(user.profilePicUrl)} />
+                  <AvatarFallback className="text-[9px]">{initialsOf(user.fullName)}</AvatarFallback>
+                </Avatar>
+                {user.fullName}
+                <span className="opacity-70 font-mono text-xs">{user.cardId}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* Fines Table */}
-        <div className="rounded-lg border bg-card overflow-hidden shadow-sm">
-          <Table>
-            <TableHeader className="bg-slate-50/50">
-              <TableRow>
-                <TableHead>Fine ID</TableHead>
-                <TableHead>User Details</TableHead>
-                <TableHead>Reason & Item</TableHead>
-                <TableHead>Amount</TableHead>
-                <TableHead>Date Issued</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Action</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {fines.map((fine) => (
-                <TableRow key={fine.id} className="hover:bg-slate-50/50 transition-colors">
-                  <TableCell className="font-medium text-primary">{fine.id}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-col">
-                      <span className="font-medium">{fine.user}</span>
-                      <span className="text-xs text-muted-foreground">{fine.userId}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-col">
-                      <span className="text-sm font-medium">{fine.reason}</span>
-                      <span className="text-xs text-muted-foreground">{fine.book}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="font-bold">${fine.amount.toFixed(2)}</TableCell>
-                  <TableCell className="text-sm text-slate-500">{fine.date}</TableCell>
-                  <TableCell>
-                    <Badge
-                      className={fine.status === "Paid" 
-                        ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200" 
-                        : "bg-red-50 text-red-700 hover:bg-red-100 border-red-200"
-                      }
-                    >
-                      {fine.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      {fine.status === "Unpaid" ? (
-                        <Dialog>
-                          <DialogTrigger asChild>
-                            <Button size="sm" className="gap-2 bg-emerald-600 hover:bg-emerald-700" onClick={() => setSelectedFine(fine)}>
-                              <CreditCard className="h-3.5 w-3.5" />
-                              Pay Now
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent>
-                            <DialogHeader>
-                              <DialogTitle>Process Fine Payment</DialogTitle>
-                              <DialogDescription>
-                                Confirm payment for fine <strong>{selectedFine?.id}</strong>.
-                              </DialogDescription>
-                            </DialogHeader>
-                            <div className="py-4 space-y-4">
-                              <div className="flex justify-between border-b pb-2">
-                                <span className="text-muted-foreground">User:</span>
-                                <span className="font-medium">{selectedFine?.user}</span>
-                              </div>
-                              <div className="flex justify-between border-b pb-2">
-                                <span className="text-muted-foreground">Amount:</span>
-                                <span className="font-bold text-lg">${selectedFine?.amount.toFixed(2)}</span>
-                              </div>
-                              <div className="flex justify-between border-b pb-2">
-                                <span className="text-muted-foreground">Reason:</span>
-                                <span className="font-medium">{selectedFine?.reason}</span>
-                              </div>
-                            </div>
-                            <DialogFooter>
-                              <Button variant="outline" onClick={() => setSelectedFine(null)}>Cancel</Button>
-                              <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => handlePayNow(selectedFine.id)}>Confirm Payment</Button>
-                            </DialogFooter>
-                          </DialogContent>
-                        </Dialog>
-                      ) : (
-                        <Dialog>
-                          <DialogTrigger asChild>
-                            <Button variant="ghost" size="sm" className="gap-2" onClick={() => setSelectedFine(fine)}>
-                              <Eye className="h-3.5 w-3.5" />
-                              Details
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent className="sm:max-w-md">
-                            <DialogHeader>
-                              <DialogTitle>Fine Details - {selectedFine?.id}</DialogTitle>
-                              <DialogDescription>
-                                Full breakdown of the fine record.
-                              </DialogDescription>
-                            </DialogHeader>
-                            <div className="space-y-6 py-4">
-                              <div className="flex items-center justify-between">
-                                <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200">Payment Completed</Badge>
-                                <span className="text-sm font-medium text-slate-500">Receipt #RCP-552</span>
-                              </div>
+        {!selectedUser ? (
+          <div className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed py-16 text-muted-foreground">
+            <Receipt className="h-10 w-10 opacity-30" />
+            <p>Select a member above to view their fines and payment history.</p>
+          </div>
+        ) : (
+          <>
+            {/* Stats */}
+            <div className="grid gap-6 md:grid-cols-2">
+              <div className="rounded-xl border bg-card p-6 flex items-center gap-4 shadow-sm">
+                <div className="h-12 w-12 rounded-full bg-amber-100 flex items-center justify-center">
+                  <AlertCircle className="h-6 w-6 text-amber-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Pending Fines</p>
+                  <h3 className="text-2xl font-bold text-amber-600">Rs. {pendingTotal.toFixed(2)}</h3>
+                </div>
+              </div>
+              <div className="rounded-xl border bg-card p-6 flex items-center gap-4 shadow-sm">
+                <div className="h-12 w-12 rounded-full bg-emerald-100 flex items-center justify-center">
+                  <CheckCircle2 className="h-6 w-6 text-emerald-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Payments (this page)</p>
+                  <h3 className="text-2xl font-bold text-emerald-600">Rs. {paidTotal.toFixed(2)}</h3>
+                </div>
+              </div>
+            </div>
 
-                              <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-1">
-                                  <p className="text-xs text-muted-foreground uppercase flex items-center gap-1.5 font-bold">
-                                    <User className="h-3 w-3" /> Member
-                                  </p>
-                                  <p className="text-sm font-medium">{selectedFine?.user}</p>
-                                  <p className="text-[10px] text-muted-foreground">{selectedFine?.userId}</p>
-                                </div>
-                                <div className="space-y-1">
-                                  <p className="text-xs text-muted-foreground uppercase flex items-center gap-1.5 font-bold">
-                                    <Calendar className="h-3 w-3" /> Date Issued
-                                  </p>
-                                  <p className="text-sm font-medium">{selectedFine?.date}</p>
-                                </div>
-                              </div>
+            <Tabs defaultValue="penalties">
+              <TabsList>
+                <TabsTrigger value="penalties">Penalties</TabsTrigger>
+                <TabsTrigger value="payments">Payment History</TabsTrigger>
+              </TabsList>
 
-                              <Separator />
-
-                              <div className="space-y-2">
-                                <p className="text-xs text-muted-foreground uppercase flex items-center gap-1.5 font-bold">
-                                  <Book className="h-3 w-3" /> Item / Reason
-                                </p>
-                                <p className="text-sm font-bold">{selectedFine?.book}</p>
-                                <p className="text-sm text-slate-600 italic">"{selectedFine?.reason}"</p>
-                              </div>
-
-                              <div className="bg-slate-50 p-4 rounded-lg flex items-center justify-between">
-                                <span className="text-sm font-bold">Total Amount Paid</span>
-                                <span className="text-xl font-bold text-emerald-600">${selectedFine?.amount.toFixed(2)}</span>
-                              </div>
-                            </div>
-                            <DialogFooter>
-                              <Button variant="outline" className="w-full gap-2">
-                                <Download className="h-4 w-4" />
-                                Download Receipt
-                              </Button>
-                            </DialogFooter>
-                          </DialogContent>
-                        </Dialog>
+              <TabsContent value="penalties" className="mt-4">
+                <div className="rounded-lg border bg-card overflow-hidden shadow-sm">
+                  <Table>
+                    <TableHeader className="bg-slate-50/50">
+                      <TableRow>
+                        <TableHead>Reason</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Amount</TableHead>
+                        <TableHead>Date Issued</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Action</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {isLoadingPenalties && (
+                        <TableRow>
+                          <TableCell colSpan={6} className="h-32 text-center">
+                            <Loader2 className="mx-auto h-6 w-6 animate-spin text-muted-foreground" />
+                          </TableCell>
+                        </TableRow>
                       )}
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                          <DropdownMenuItem>Send Reminder</DropdownMenuItem>
-                          <DropdownMenuItem>Print Receipt</DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-red-600">Waive Fine</DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-          <div className="p-4 border-t bg-slate-50/30">
-            <Pagination>
-              <PaginationContent>
-                <PaginationItem>
-                  <PaginationPrevious href="#" />
-                </PaginationItem>
-                <PaginationItem>
-                  <PaginationLink href="#" isActive>1</PaginationLink>
-                </PaginationItem>
-                <PaginationItem>
-                  <PaginationLink href="#">2</PaginationLink>
-                </PaginationItem>
-                <PaginationItem>
-                  <PaginationNext href="#" />
-                </PaginationItem>
-              </PaginationContent>
-            </Pagination>
-          </div>
-        </div>
+                      {!isLoadingPenalties && penaltyRows.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
+                            No penalties for {selectedUser.fullName}.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                      {penaltyRows.map((fine) => (
+                        <TableRow key={fine.penaltyId} className="hover:bg-slate-50/50 transition-colors">
+                          <TableCell className="font-medium">{fine.description}</TableCell>
+                          <TableCell>{fine.penaltyType}</TableCell>
+                          <TableCell className="font-bold">Rs. {Number(fine.amount).toFixed(2)}</TableCell>
+                          <TableCell className="text-sm text-slate-500">
+                            {fine.createdAt ? new Date(fine.createdAt).toLocaleDateString() : "—"}
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              className={
+                                fine.status !== "Pending"
+                                  ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200"
+                                  : "bg-red-50 text-red-700 hover:bg-red-100 border-red-200"
+                              }
+                            >
+                              {fine.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {fine.status === "Pending" && (
+                              <Button
+                                size="sm"
+                                className="gap-2 bg-emerald-600 hover:bg-emerald-700"
+                                disabled={isResolving}
+                                onClick={() =>
+                                  resolvePenalty(
+                                    { userId: userId!, penaltyId: fine.penaltyId },
+                                    {
+                                      onSuccess: () => toast({ title: "Penalty resolved" }),
+                                      onError,
+                                    },
+                                  )
+                                }
+                              >
+                                <CheckCircle2 className="h-3.5 w-3.5" />
+                                Resolve
+                              </Button>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="payments" className="mt-4">
+                <div className="rounded-lg border bg-card overflow-hidden shadow-sm">
+                  <Table>
+                    <TableHeader className="bg-slate-50/50">
+                      <TableRow>
+                        <TableHead>Payment Type</TableHead>
+                        <TableHead>Amount</TableHead>
+                        <TableHead>Date</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {isLoadingPayments && (
+                        <TableRow>
+                          <TableCell colSpan={3} className="h-32 text-center">
+                            <Loader2 className="mx-auto h-6 w-6 animate-spin text-muted-foreground" />
+                          </TableCell>
+                        </TableRow>
+                      )}
+                      {!isLoadingPayments && paymentRows.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={3} className="h-32 text-center text-muted-foreground">
+                            No payments recorded for {selectedUser.fullName}.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                      {paymentRows.map((payment) => (
+                        <TableRow key={payment.paymentId} className="hover:bg-slate-50/50 transition-colors">
+                          <TableCell className="font-medium">{payment.paymentType}</TableCell>
+                          <TableCell className="font-bold text-emerald-700">
+                            Rs. {Number(payment.amountPaid).toFixed(2)}
+                          </TableCell>
+                          <TableCell className="text-sm text-slate-500">
+                            {payment.createdAt ? new Date(payment.createdAt).toLocaleString() : "—"}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </TabsContent>
+            </Tabs>
+          </>
+        )}
       </div>
+
+      {/* Add penalty dialog */}
+      <Dialog open={addPenaltyOpen} onOpenChange={setAddPenaltyOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Penalty</DialogTitle>
+            <DialogDescription>
+              Charge a fine to {selectedUser?.fullName}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="penalty-type">Penalty Type</Label>
+              <Select
+                value={penaltyForm.penaltyType}
+                onValueChange={(value) =>
+                  setPenaltyForm((prev) => ({ ...prev, penaltyType: value as EPenaltyTypes }))
+                }
+              >
+                <SelectTrigger id="penalty-type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={EPenaltyTypes.Overdue}>Overdue</SelectItem>
+                  <SelectItem value={EPenaltyTypes.PropertyDamage}>Property Damage</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="penalty-barcode">Book Barcode (if applicable)</Label>
+              <Input
+                id="penalty-barcode"
+                placeholder="e.g. 100001"
+                value={penaltyForm.barcode}
+                onChange={(e) => setPenaltyForm((prev) => ({ ...prev, barcode: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="penalty-description">Description *</Label>
+              <Input
+                id="penalty-description"
+                placeholder="Reason for the fine"
+                value={penaltyForm.description}
+                onChange={(e) =>
+                  setPenaltyForm((prev) => ({ ...prev, description: e.target.value }))
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="penalty-amount">Amount (Rs.) *</Label>
+              <Input
+                id="penalty-amount"
+                type="number"
+                placeholder="100"
+                value={penaltyForm.amount}
+                onChange={(e) => setPenaltyForm((prev) => ({ ...prev, amount: e.target.value }))}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddPenaltyOpen(false)} disabled={isAddingPenalty}>
+              Cancel
+            </Button>
+            <Button onClick={submitPenalty} disabled={isAddingPenalty}>
+              {isAddingPenalty && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Add Penalty
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Record payment dialog */}
+      <Dialog open={paymentOpen} onOpenChange={setPaymentOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Record Payment</DialogTitle>
+            <DialogDescription>
+              Record a payment received from {selectedUser?.fullName}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="payment-type">Payment Type</Label>
+              <Select
+                value={paymentForm.paymentType}
+                onValueChange={(value) =>
+                  setPaymentForm((prev) => ({ ...prev, paymentType: value as EPaymentTypes }))
+                }
+              >
+                <SelectTrigger id="payment-type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={EPaymentTypes.Penalty}>Penalty</SelectItem>
+                  <SelectItem value={EPaymentTypes.Membership}>Membership</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="payment-amount">Amount (Rs.) *</Label>
+              <Input
+                id="payment-amount"
+                type="number"
+                placeholder="100"
+                value={paymentForm.amountPaid}
+                onChange={(e) =>
+                  setPaymentForm((prev) => ({ ...prev, amountPaid: e.target.value }))
+                }
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPaymentOpen(false)} disabled={isPaying}>
+              Cancel
+            </Button>
+            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={submitPayment} disabled={isPaying}>
+              {isPaying && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Confirm Payment
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import Layout from "@/components/Layout";
 import {
   Table,
@@ -9,17 +10,7 @@ import {
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import {
-  Search,
-  Plus,
-  Filter,
-  MoreHorizontal,
-  Edit,
-  Trash2,
-  Mail,
-  UserCheck,
-  UserX,
-} from "lucide-react";
+import { Search, Plus, MoreHorizontal, Eye, UserCheck, UserX, Loader2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,56 +29,53 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
+import { useUsers, useUpdateAccountStatus } from "@/hooks/api/use-users";
+import { resUrl } from "@/api/entities";
+import { DEFAULT_PAGE_SIZE } from "@/api/constants";
+import { useToast } from "@/hooks/use-toast";
 
-const users = [
-  {
-    id: "USR-001",
-    name: "John Doe",
-    email: "john.doe@college.edu",
-    role: "Student",
-    status: "Active",
-    joinedDate: "2023-09-12",
-    avatar: "JD",
-  },
-  {
-    id: "USR-002",
-    name: "Jane Smith",
-    email: "jane.smith@college.edu",
-    role: "Staff",
-    status: "Active",
-    joinedDate: "2022-01-20",
-    avatar: "JS",
-  },
-  {
-    id: "USR-003",
-    name: "Robert Brown",
-    email: "robert.b@college.edu",
-    role: "Student",
-    status: "Suspended",
-    joinedDate: "2023-10-05",
-    avatar: "RB",
-  },
-  {
-    id: "USR-004",
-    name: "Alice Johnson",
-    email: "alice.j@college.edu",
-    role: "Student",
-    status: "Active",
-    joinedDate: "2024-02-14",
-    avatar: "AJ",
-  },
-  {
-    id: "USR-005",
-    name: "Michael Wilson",
-    email: "m.wilson@college.edu",
-    role: "Faculty",
-    status: "Active",
-    joinedDate: "2021-08-30",
-    avatar: "MW",
-  },
-];
+function initialsOf(name?: string) {
+  return (
+    name
+      ?.split(" ")
+      .map((part) => part[0])
+      .slice(0, 2)
+      .join("")
+      .toUpperCase() || "?"
+  );
+}
 
 export default function Users() {
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const { toast } = useToast();
+
+  const { data, isLoading, isError, error } = useUsers({
+    page,
+    pageSize: DEFAULT_PAGE_SIZE,
+    ...(search.trim() ? { seed: search.trim() } : {}),
+  });
+
+  const { mutate: updateStatus } = useUpdateAccountStatus();
+
+  const users = data?.data ?? [];
+  const lastPage = data?.info?.lastPage ?? 1;
+
+  const setStatus = (userId: string, status: string) => {
+    updateStatus(
+      { userId, status },
+      {
+        onSuccess: () => toast({ title: `Account ${status.toLowerCase()}` }),
+        onError: (err) =>
+          toast({
+            title: "Failed to update status",
+            description: err.response?.data?.error ?? err.message,
+            variant: "destructive",
+          }),
+      },
+    );
+  };
+
   return (
     <Layout>
       <div className="flex flex-col gap-8">
@@ -113,18 +101,14 @@ export default function Users() {
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               type="search"
-              placeholder="Search by name, email, or ID..."
+              placeholder="Search by name or card ID..."
               className="pl-9"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
             />
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" className="gap-2">
-              <Filter className="h-4 w-4" />
-              Filter
-            </Button>
-            <Button variant="outline" size="sm">
-              Role
-            </Button>
           </div>
         </div>
 
@@ -133,39 +117,66 @@ export default function Users() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[100px]">ID</TableHead>
+                <TableHead className="w-[140px]">Card ID</TableHead>
                 <TableHead>User</TableHead>
-                <TableHead>Role</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Joined Date</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
+              {isLoading && (
+                <TableRow>
+                  <TableCell colSpan={5} className="h-32 text-center">
+                    <Loader2 className="mx-auto h-6 w-6 animate-spin text-muted-foreground" />
+                  </TableCell>
+                </TableRow>
+              )}
+              {isError && (
+                <TableRow>
+                  <TableCell colSpan={5} className="h-32 text-center text-destructive">
+                    Failed to load users{error?.message ? `: ${error.message}` : "."}
+                  </TableCell>
+                </TableRow>
+              )}
+              {!isLoading && !isError && users.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={5} className="h-32 text-center text-muted-foreground">
+                    No users found.
+                  </TableCell>
+                </TableRow>
+              )}
               {users.map((user) => (
-                <TableRow key={user.id}>
-                  <TableCell className="font-mono text-xs">{user.id}</TableCell>
+                <TableRow key={user.userId}>
+                  <TableCell className="font-mono text-xs">{user.cardId}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-3">
                       <Avatar className="h-8 w-8">
-                        <AvatarFallback>{user.avatar}</AvatarFallback>
+                        <AvatarImage src={resUrl(user.profilePicUrl)} />
+                        <AvatarFallback>{initialsOf(user.fullName)}</AvatarFallback>
                       </Avatar>
-                      <div className="flex flex-col">
-                        <span className="font-medium">{user.name}</span>
-                        <span className="text-xs text-muted-foreground">{user.email}</span>
-                      </div>
+                      <span className="font-medium">{user.fullName}</span>
                     </div>
                   </TableCell>
-                  <TableCell>{user.role}</TableCell>
                   <TableCell>
                     <Badge
                       variant={user.status === "Active" ? "default" : "destructive"}
-                      className={user.status === "Active" ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100" : ""}
+                      className={
+                        user.status === "Active"
+                          ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100"
+                          : user.status === "Pending"
+                            ? "bg-amber-100 text-amber-700 hover:bg-amber-100"
+                            : ""
+                      }
                     >
-                      {user.status}
+                      {user.status ?? "Unknown"}
                     </Badge>
                   </TableCell>
-                  <TableCell>{user.joinedDate}</TableCell>
+                  <TableCell>
+                    {user.accountCreationDate
+                      ? new Date(user.accountCreationDate).toLocaleDateString()
+                      : "—"}
+                  </TableCell>
                   <TableCell className="text-right">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -176,26 +187,26 @@ export default function Users() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuItem className="gap-2">
-                          <Mail className="h-4 w-4" /> Send Email
-                        </DropdownMenuItem>
                         <DropdownMenuItem className="gap-2" asChild>
-                          <Link to={`/users/${user.id}`}>
-                            <Edit className="h-4 w-4" /> Edit User
+                          <Link to={`/users/${user.userId}`}>
+                            <Eye className="h-4 w-4" /> View Details
                           </Link>
                         </DropdownMenuItem>
                         {user.status === "Active" ? (
-                          <DropdownMenuItem className="gap-2 text-amber-600">
+                          <DropdownMenuItem
+                            className="gap-2 text-amber-600"
+                            onSelect={() => setStatus(user.userId, "Suspended")}
+                          >
                             <UserX className="h-4 w-4" /> Suspend
                           </DropdownMenuItem>
                         ) : (
-                          <DropdownMenuItem className="gap-2 text-emerald-600">
+                          <DropdownMenuItem
+                            className="gap-2 text-emerald-600"
+                            onSelect={() => setStatus(user.userId, "Active")}
+                          >
                             <UserCheck className="h-4 w-4" /> Activate
                           </DropdownMenuItem>
                         )}
-                        <DropdownMenuItem className="gap-2 text-destructive">
-                          <Trash2 className="h-4 w-4" /> Delete
-                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
@@ -207,16 +218,29 @@ export default function Users() {
             <Pagination>
               <PaginationContent>
                 <PaginationItem>
-                  <PaginationPrevious href="#" />
+                  <PaginationPrevious
+                    href="#"
+                    className={page <= 1 ? "pointer-events-none opacity-50" : ""}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setPage((p) => Math.max(1, p - 1));
+                    }}
+                  />
                 </PaginationItem>
                 <PaginationItem>
-                  <PaginationLink href="#" isActive>1</PaginationLink>
+                  <PaginationLink href="#" isActive onClick={(e) => e.preventDefault()}>
+                    {page}
+                  </PaginationLink>
                 </PaginationItem>
                 <PaginationItem>
-                  <PaginationLink href="#">2</PaginationLink>
-                </PaginationItem>
-                <PaginationItem>
-                  <PaginationNext href="#" />
+                  <PaginationNext
+                    href="#"
+                    className={page >= lastPage ? "pointer-events-none opacity-50" : ""}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setPage((p) => Math.min(lastPage, p + 1));
+                    }}
+                  />
                 </PaginationItem>
               </PaginationContent>
             </Pagination>

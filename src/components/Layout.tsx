@@ -1,6 +1,6 @@
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
-import { Bell, Search, User } from "lucide-react";
+import { Bell, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
@@ -12,13 +12,29 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useMe, useLogout } from "@/hooks/api/use-auth";
+import { useNotificationCount } from "@/hooks/api/use-notifications";
+import { resUrl } from "@/api/entities";
 
 interface LayoutProps {
   children: React.ReactNode;
 }
 
 export default function Layout({ children }: LayoutProps) {
+  const navigate = useNavigate();
+  const { data: me } = useMe();
+  const { data: notificationCount } = useNotificationCount();
+  const { mutate: logout } = useLogout(() => navigate("/login", { replace: true }));
+
+  const user = me?.data;
+  const initials = user?.fullName
+    ?.split(" ")
+    .map((part) => part[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+
   return (
     <SidebarProvider>
       <div className="flex min-h-screen w-full bg-background">
@@ -37,31 +53,48 @@ export default function Layout({ children }: LayoutProps) {
               </div>
             </div>
             <div className="flex items-center gap-4">
-              <Button variant="ghost" size="icon" className="relative">
-                <Bell className="h-5 w-5" />
-                <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-destructive" />
+              <Button variant="ghost" size="icon" className="relative" asChild>
+                <Link to="/notifications">
+                  <Bell className="h-5 w-5" />
+                  {(notificationCount?.count ?? 0) > 0 && (
+                    <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-medium text-destructive-foreground">
+                      {notificationCount!.count > 99 ? "99+" : notificationCount!.count}
+                    </span>
+                  )}
+                </Link>
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="rounded-full">
                     <Avatar className="h-8 w-8">
-                      <AvatarImage src="/placeholder.svg" alt="Profile" />
-                      <AvatarFallback>AD</AvatarFallback>
+                      <AvatarImage src={resUrl(user?.profilePicUrl)} alt="Profile" />
+                      <AvatarFallback>{initials || "AD"}</AvatarFallback>
                     </Avatar>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                  <DropdownMenuLabel className="font-normal">
+                    <div className="flex flex-col space-y-1">
+                      <p className="text-sm font-medium leading-none">
+                        {user?.fullName ?? "My Account"}
+                      </p>
+                      {user?.email && (
+                        <p className="text-xs leading-none text-muted-foreground">
+                          {user.email}
+                        </p>
+                      )}
+                    </div>
+                  </DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
                     <Link to="/profile">Profile</Link>
                   </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link to="/settings">Settings</Link>
-                  </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem className="text-destructive" asChild>
-                    <Link to="/login">Log out</Link>
+                  <DropdownMenuItem
+                    className="text-destructive"
+                    onSelect={() => logout()}
+                  >
+                    Log out
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
