@@ -31,8 +31,8 @@ cp .env.example .env
 
 | Variable | Description | Default |
 |---|---|---|
-| `VITE_API_URL` | Base URL of the backend API (no trailing slash) | `https://libraryapi.patancollege.edu.np/api` |
-| `VITE_RES_URL` | Base URL for images/files served by the backend (cover photos, profile pictures) — keep the trailing slash | `https://libraryapi.patancollege.edu.np/res/` |
+| `VITE_API_URL` | Base URL of the backend API (no trailing slash)
+| `VITE_RES_URL` | Base URL for images/files served by the backend (cover photos, profile pictures) — keep the trailing slash 
 
 `.env` is gitignored, so local overrides never get committed. If no `.env`
 file is present, the app falls back to the defaults above (see
