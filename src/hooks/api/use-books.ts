@@ -18,6 +18,7 @@ import {
   bookSingleService,
   booksService,
   bookTrackService,
+  markReferenceService,
 } from "@/api/services";
 
 export const useBooks = (params: PaginationParams, enabled = true) => {
@@ -125,6 +126,22 @@ export const useDeleteCopy = (onSuccess?: () => void) => {
 
   return useMutation<unknown, AxiosError<ErrorRes>, string>({
     mutationFn: (bookId) => booksService.setSubroute(`/single/${bookId}`).delete(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: BOOKS_CACHE_KEY });
+      onSuccess?.();
+    },
+  });
+};
+
+/** Flags a copy as reference-only (PUT books/:bookId/mark-reference) or clears the flag. */
+export const useSetReference = (onSuccess?: () => void) => {
+  const queryClient = useQueryClient();
+
+  return useMutation<unknown, AxiosError<ErrorRes>, { bookId: string; isReference: boolean }>({
+    mutationFn: ({ bookId, isReference }) =>
+      isReference
+        ? markReferenceService(bookId).put("mark-reference", {})
+        : markReferenceService(bookId).delete("mark-reference"),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: BOOKS_CACHE_KEY });
       onSuccess?.();

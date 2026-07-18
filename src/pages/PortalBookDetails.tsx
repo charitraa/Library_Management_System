@@ -9,27 +9,17 @@ import {
   CheckCircle2,
   Info,
   Loader2,
-  Reply,
-  Trash2,
 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import { useBookInfo } from "@/hooks/api/use-books";
 import { useAddMyReservation } from "@/hooks/api/use-reservations";
-import {
-  useComments,
-  useDeleteComment,
-  useDeleteReply,
-  usePostComment,
-  useRateBook,
-  useReplyComment,
-} from "@/hooks/api/use-comments";
-import { useMe } from "@/hooks/api/use-auth";
+import { usePostComment, useRateBook } from "@/hooks/api/use-comments";
 import { resUrl } from "@/api/entities";
+import CommentSection from "@/components/CommentSection";
 
 const Separator = ({ className }: { className?: string }) => (
   <div className={`h-px w-full ${className}`} />
@@ -42,20 +32,8 @@ export default function PortalBookDetails() {
   const [isReserved, setIsReserved] = useState(false);
   const [reviewText, setReviewText] = useState("");
   const [reviewRating, setReviewRating] = useState(0);
-  const [replyingTo, setReplyingTo] = useState<string | null>(null);
-  const [replyText, setReplyText] = useState("");
-
-  const { data: me } = useMe();
-  const currentUserId = me?.data?.userId;
 
   const { data: book, isLoading, isError, error } = useBookInfo(id);
-  const { data: comments } = useComments(id);
-  const { mutate: replyToComment, isPending: isReplying } = useReplyComment(() => {
-    setReplyingTo(null);
-    setReplyText("");
-  });
-  const { mutate: deleteComment } = useDeleteComment(() => toast({ title: "Comment deleted" }));
-  const { mutate: deleteReply } = useDeleteReply(() => toast({ title: "Reply deleted" }));
 
   const { mutate: reserve, isPending: isReserving } = useAddMyReservation({
     onSuccess: () => {
@@ -130,7 +108,6 @@ export default function PortalBookDetails() {
   const ratingCount = book.ratings?.length ?? 0;
   const firstGenre = book.bookGenres?.[0]?.genre?.genre;
   const isbn = book.isbns?.map((i) => i.isbn).join(", ");
-  const commentRows = comments?.data ?? [];
 
   return (
     <PortalLayout>
@@ -325,117 +302,7 @@ export default function PortalBookDetails() {
                 </div>
               </Card>
 
-              <div className="space-y-4">
-                {commentRows.length === 0 && (
-                  <p className="text-center text-slate-400 font-medium py-6">
-                    No reviews yet. Be the first to share your thoughts!
-                  </p>
-                )}
-                {commentRows.map((review) => {
-                  const userRating = review.user?.ratings?.[0]?.rating ?? 0;
-                  const isOwnComment = review.userId === currentUserId;
-                  return (
-                    <div key={review.commentId} className="p-8 bg-white border border-slate-100 rounded-[2rem] shadow-sm flex flex-col gap-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="h-10 w-10 rounded-xl bg-slate-100 flex items-center justify-center font-black text-slate-500 overflow-hidden">
-                            {review.user?.profilePicUrl ? (
-                              <img
-                                src={resUrl(review.user.profilePicUrl)}
-                                alt={review.user.fullName}
-                                className="h-full w-full object-cover"
-                              />
-                            ) : (
-                              review.user?.fullName?.[0] ?? "?"
-                            )}
-                          </div>
-                          <div>
-                            <h4 className="font-black text-slate-900 text-sm">{review.user?.fullName}</h4>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                              {new Date(review.createdAt).toLocaleDateString()}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          {userRating > 0 && (
-                            <div className="flex gap-0.5">
-                              {[...Array(5)].map((_, j) => (
-                                <Star key={j} className={`h-3 w-3 ${j < userRating ? "fill-yellow-400 text-yellow-400" : "text-slate-200"}`} />
-                              ))}
-                            </div>
-                          )}
-                          {isOwnComment && (
-                            <button
-                              onClick={() => deleteComment(review.commentId)}
-                              className="text-slate-300 hover:text-destructive transition-colors"
-                              title="Delete comment"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                      <p className="text-slate-600 font-medium leading-relaxed">{review.comment}</p>
-
-                      {review.replies?.length > 0 && (
-                        <div className="ml-6 space-y-3 border-l-2 border-slate-100 pl-6">
-                          {review.replies.map((reply) => (
-                            <div key={reply.commentReplyId} className="flex items-start justify-between gap-2">
-                              <div>
-                                <p className="text-xs font-black text-slate-700">{reply.user?.fullName}</p>
-                                <p className="text-sm text-slate-500">{reply.reply}</p>
-                              </div>
-                              <button
-                                onClick={() => deleteReply(reply.commentReplyId)}
-                                className="text-slate-300 hover:text-destructive transition-colors shrink-0"
-                                title="Delete reply"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {replyingTo === review.commentId ? (
-                        <div className="flex gap-2">
-                          <Input
-                            autoFocus
-                            placeholder="Write a reply..."
-                            value={replyText}
-                            onChange={(e) => setReplyText(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" && replyText.trim()) {
-                                replyToComment({ commentId: review.commentId, reply: replyText.trim() });
-                              }
-                            }}
-                            className="rounded-xl"
-                          />
-                          <Button
-                            size="sm"
-                            disabled={isReplying || !replyText.trim()}
-                            onClick={() =>
-                              replyToComment({ commentId: review.commentId, reply: replyText.trim() })
-                            }
-                          >
-                            {isReplying ? <Loader2 className="h-4 w-4 animate-spin" /> : "Reply"}
-                          </Button>
-                          <Button size="sm" variant="ghost" onClick={() => setReplyingTo(null)}>
-                            Cancel
-                          </Button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => setReplyingTo(review.commentId)}
-                          className="flex items-center gap-1 text-xs font-bold text-primary hover:underline w-fit"
-                        >
-                          <Reply className="h-3.5 w-3.5" /> Reply
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+              <CommentSection bookInfoId={book.bookInfoId} />
             </div>
           </div>
         </div>

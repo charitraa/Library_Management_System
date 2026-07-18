@@ -16,6 +16,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useMe, useLogout } from "@/hooks/api/use-auth";
 import { useNotificationCount } from "@/hooks/api/use-notifications";
 import { resUrl } from "@/api/entities";
+import ThemeToggle from "./ThemeToggle";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -53,6 +54,7 @@ export default function Layout({ children }: LayoutProps) {
               </div>
             </div>
             <div className="flex items-center gap-4">
+              <ThemeToggle />
               <Button variant="ghost" size="icon" className="relative" asChild>
                 <Link to="/notifications">
                   <Bell className="h-5 w-5" />

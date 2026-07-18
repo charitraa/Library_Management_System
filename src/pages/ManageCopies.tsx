@@ -17,9 +17,25 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Plus, Trash2, Loader2, BookMarked } from "lucide-react";
+import {
+  ArrowLeft,
+  Plus,
+  Trash2,
+  Loader2,
+  BookMarked,
+  MoreHorizontal,
+  SearchX,
+} from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -47,8 +63,10 @@ import {
   useBookCopies,
   useBookInfo,
   useDeleteCopy,
+  useSetReference,
   BookCopyRow,
 } from "@/hooks/api/use-books";
+import { useAddLostBook } from "@/hooks/api/use-lost-books";
 
 function getStatusBadge(status: string) {
   switch (status) {
@@ -91,6 +109,52 @@ const ManageCopies = () => {
     toast({ title: "Copy removed" });
     setCopyToDelete(null);
   });
+
+  const [copyToMarkLost, setCopyToMarkLost] = useState<BookCopyRow | null>(null);
+  const [lostOn, setLostOn] = useState(() => new Date().toISOString().split("T")[0]);
+
+  const { mutate: setReference, isPending: isSettingReference } = useSetReference(() =>
+    toast({ title: "Reference flag updated" }),
+  );
+
+  const { mutate: markLost, isPending: isMarkingLost } = useAddLostBook(() => {
+    toast({ title: "Copy marked as lost" });
+    setCopyToMarkLost(null);
+  });
+
+  const toggleReference = (copy: BookCopyRow) => {
+    setReference(
+      { bookId: copy.bookId, isReference: !copy.isReference },
+      {
+        onError: (err) =>
+          toast({
+            title: "Failed to update reference flag",
+            description: err.response?.data?.error ?? err.message,
+            variant: "destructive",
+          }),
+      },
+    );
+  };
+
+  const handleMarkLost = () => {
+    if (!copyToMarkLost) return;
+    markLost(
+      {
+        bookInfoId: copyToMarkLost.bookInfoId,
+        barcode: copyToMarkLost.barcode,
+        lostOn,
+        isReference: copyToMarkLost.isReference,
+      },
+      {
+        onError: (err) =>
+          toast({
+            title: "Failed to mark copy as lost",
+            description: err.response?.data?.error ?? err.message,
+            variant: "destructive",
+          }),
+      },
+    );
+  };
 
   const handleAddCopies = () => {
     const barcodes = barcodesInput
@@ -262,15 +326,42 @@ const ManageCopies = () => {
                       )}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 hover:bg-red-50 text-red-600 hover:text-red-700"
-                        title="Remove Copy"
-                        onClick={() => setCopyToDelete(copy)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            disabled={isSettingReference}
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                            <span className="sr-only">Copy actions</span>
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                          <DropdownMenuItem className="gap-2" onSelect={() => toggleReference(copy)}>
+                            <BookMarked className="h-4 w-4" />
+                            {copy.isReference ? "Allow circulation" : "Mark as reference"}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="gap-2 text-amber-600"
+                            onSelect={() => {
+                              setLostOn(new Date().toISOString().split("T")[0]);
+                              setCopyToMarkLost(copy);
+                            }}
+                          >
+                            <SearchX className="h-4 w-4" /> Mark as lost
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="gap-2 text-destructive focus:text-destructive"
+                            onSelect={() => setCopyToDelete(copy)}
+                          >
+                            <Trash2 className="h-4 w-4" /> Remove copy
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -279,6 +370,52 @@ const ManageCopies = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Mark copy as lost */}
+      <Dialog open={!!copyToMarkLost} onOpenChange={(open) => !open && setCopyToMarkLost(null)}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Mark copy as lost</DialogTitle>
+            <DialogDescription>
+              Report copy “{copyToMarkLost?.barcode}” of “{book?.title}” as lost. It will
+              appear in the Lost Books register.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label>Barcode</Label>
+              <Input value={copyToMarkLost?.barcode ?? ""} disabled className="font-mono" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="lost-on">Lost On</Label>
+              <Input
+                id="lost-on"
+                type="date"
+                value={lostOn}
+                onChange={(e) => setLostOn(e.target.value)}
+              />
+            </div>
+            {copyToMarkLost?.isReference && (
+              <p className="text-sm text-amber-600 flex items-center gap-1">
+                <BookMarked className="h-4 w-4" /> This is a reference-only copy.
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setCopyToMarkLost(null)}
+              disabled={isMarkingLost}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleMarkLost} disabled={isMarkingLost || !lostOn}>
+              {isMarkingLost && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Mark Lost
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog open={!!copyToDelete} onOpenChange={(open) => !open && setCopyToDelete(null)}>
         <AlertDialogContent>

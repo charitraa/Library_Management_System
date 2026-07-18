@@ -53,6 +53,10 @@ import { BookInfo } from "@/api/entities";
 import { DEFAULT_PAGE_SIZE } from "@/api/constants";
 import { useToast } from "@/hooks/use-toast";
 import EditBookDialog from "@/components/EditBookDialog";
+import CatalogFilters, {
+  CatalogFilterValues,
+  EMPTY_CATALOG_FILTERS,
+} from "@/components/CatalogFilters";
 
 function bookAvailability(book: BookInfo) {
   const total = book.total ?? book.books?.length ?? 0;
@@ -66,6 +70,7 @@ function bookAvailability(book: BookInfo) {
 export default function Books() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
+  const [filters, setFilters] = useState<CatalogFilterValues>(EMPTY_CATALOG_FILTERS);
   const [bookToDelete, setBookToDelete] = useState<BookInfo | null>(null);
   const [bookToEdit, setBookToEdit] = useState<BookInfo | null>(null);
   const { toast } = useToast();
@@ -74,6 +79,10 @@ export default function Books() {
     page,
     pageSize: DEFAULT_PAGE_SIZE,
     ...(search.trim() ? { seed: search.trim() } : {}),
+    ...(filters.author ? { author: filters.author } : {}),
+    ...(filters.genre ? { genre: filters.genre } : {}),
+    ...(filters.publisher ? { publisher: filters.publisher } : {}),
+    ...(filters.keyword ? { keyword: filters.keyword } : {}),
   });
 
   const { mutate: deleteBook, isPending: isDeleting } = useDeleteBook(() => {
@@ -118,6 +127,13 @@ export default function Books() {
               }}
             />
           </div>
+          <CatalogFilters
+            value={filters}
+            onChange={(next) => {
+              setFilters(next);
+              setPage(1);
+            }}
+          />
         </div>
 
         {/* Book Table */}

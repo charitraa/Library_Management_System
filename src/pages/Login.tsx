@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -135,6 +135,20 @@ export default function Login() {
               </form>
             </CardContent>
           </Card>
+          <div className="space-y-2 text-center text-sm">
+            <p>
+              New to the library?{" "}
+              <Link to="/enroll" className="font-medium text-primary hover:underline">
+                Create an account
+              </Link>
+            </p>
+            <p>
+              Just looking?{" "}
+              <Link to="/browse" className="font-medium text-primary hover:underline">
+                Browse the catalog without signing in
+              </Link>
+            </p>
+          </div>
           <p className="text-center text-xs text-muted-foreground">
             Students and staff sign in with their PCPS library card ID. Your
             dashboard is chosen automatically based on your role.

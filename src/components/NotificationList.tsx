@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Bell, Check, Loader2 } from "lucide-react";
@@ -23,12 +24,14 @@ function timeAgo(dateString: string) {
 /** Shared notification feed used by both the admin and portal notification pages. */
 export default function NotificationList() {
   const { toast } = useToast();
+  const [view, setView] = useState<"all" | "unread">("all");
   const { data, isLoading, isError, error } = useNotifications();
   const { mutate: readOne } = useReadNotification();
   const { mutate: readAll, isPending: isMarkingAll } = useReadAllNotifications();
 
   const notifications = data?.data ?? [];
   const unreadCount = notifications.filter((n) => !n.read).length;
+  const visibleNotifications = view === "unread" ? notifications.filter((n) => !n.read) : notifications;
 
   const markAllAsRead = () => {
     readAll(
@@ -63,8 +66,31 @@ export default function NotificationList() {
 
   return (
     <div className="space-y-4">
-      {unreadCount > 0 && (
-        <div className="flex justify-end">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex rounded-lg border p-0.5">
+          <Button
+            variant={view === "all" ? "secondary" : "ghost"}
+            size="sm"
+            className="h-7 rounded-md"
+            onClick={() => setView("all")}
+          >
+            All
+          </Button>
+          <Button
+            variant={view === "unread" ? "secondary" : "ghost"}
+            size="sm"
+            className="h-7 rounded-md gap-1"
+            onClick={() => setView("unread")}
+          >
+            Unread
+            {unreadCount > 0 && (
+              <Badge variant="outline" className="h-4 px-1 text-[10px]">
+                {unreadCount}
+              </Badge>
+            )}
+          </Button>
+        </div>
+        {unreadCount > 0 && (
           <Button
             variant="outline"
             size="sm"
@@ -79,21 +105,25 @@ export default function NotificationList() {
             )}
             Mark all as read ({unreadCount})
           </Button>
-        </div>
-      )}
+        )}
+      </div>
 
-      {notifications.length === 0 ? (
+      {visibleNotifications.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <div className="h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center mb-4">
             <Bell className="h-6 w-6 text-slate-400" />
           </div>
-          <h3 className="text-lg font-semibold">No notifications</h3>
+          <h3 className="text-lg font-semibold">
+            {view === "unread" ? "No unread notifications" : "No notifications"}
+          </h3>
           <p className="text-muted-foreground max-w-xs mx-auto">
-            You're all caught up! No new notifications at the moment.
+            {view === "unread"
+              ? "You're all caught up on unread notifications."
+              : "You're all caught up! No new notifications at the moment."}
           </p>
         </div>
       ) : (
-        notifications.map((notif) => (
+        visibleNotifications.map((notif) => (
           <div
             key={notif.notificationId}
             className={`group relative flex items-start gap-4 rounded-xl border p-6 transition-all hover:bg-slate-50 ${

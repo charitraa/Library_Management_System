@@ -85,6 +85,32 @@ export const useReplyComment = (onSuccess?: () => void) => {
   });
 };
 
+export const useUpdateComment = (onSuccess?: () => void) => {
+  const queryClient = useQueryClient();
+
+  return useMutation<unknown, AxiosError<ErrorRes>, { commentId: string; comment: string }>({
+    mutationFn: ({ commentId, comment }) =>
+      commentService.put(`update/${commentId}`, { comment }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: COMMENTS_CACHE_KEY });
+      onSuccess?.();
+    },
+  });
+};
+
+export const useUpdateReply = (onSuccess?: () => void) => {
+  const queryClient = useQueryClient();
+
+  return useMutation<unknown, AxiosError<ErrorRes>, { commentReplyId: string; reply: string }>({
+    mutationFn: ({ commentReplyId, reply }) =>
+      commentService.put(`update-reply/${commentReplyId}`, { reply }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: COMMENTS_CACHE_KEY });
+      onSuccess?.();
+    },
+  });
+};
+
 export const useDeleteComment = (onSuccess?: () => void) => {
   const queryClient = useQueryClient();
 

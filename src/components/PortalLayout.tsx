@@ -28,6 +28,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import pcpsLogo from "@/assets/pcpsLogo.png";
+import ThemeToggle from "./ThemeToggle";
 
 const navItems = [
   { title: "Dashboard", url: "/portal", icon: Home },
@@ -54,14 +55,14 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
     .toUpperCase();
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#F8FAFC]">
+    <div className="min-h-screen flex flex-col bg-[#F8FAFC] dark:bg-background">
       {/* Top Navbar */}
-      <header className="sticky top-0 z-50 w-full border-b bg-white/80 backdrop-blur-md">
+      <header className="sticky top-0 z-50 w-full border-b bg-white/80 dark:bg-background/80 backdrop-blur-md">
         <div className="container flex h-16 items-center justify-between px-4">
           <div className="flex items-center gap-6">
             <Link to="/portal" className="flex items-center gap-2">
               <img src={pcpsLogo} alt="PCPS College" className="h-9 w-9 rounded-lg object-contain bg-white p-0.5 shadow-sm" />
-              <span className="text-xl font-bold tracking-tight text-slate-900 hidden sm:block">StudentLib</span>
+              <span className="text-xl font-bold tracking-tight text-slate-900 dark:text-foreground hidden sm:block">StudentLib</span>
             </Link>
             
             <nav className="hidden lg:flex items-center gap-1">
@@ -90,6 +91,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
               />
             </div>
 
+            <ThemeToggle />
             <Button variant="ghost" size="icon" className="relative text-slate-600 rounded-full" asChild>
               <Link to="/portal/notifications">
                 <Bell className="h-5 w-5" />
@@ -182,7 +184,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
       </main>
       
       {/* Footer */}
-      <footer className="border-t bg-white py-8">
+      <footer className="border-t bg-white dark:bg-background py-8">
         <div className="container px-4 text-center">
           <p className="text-sm text-slate-500">
             © 2024 College Library Management System. Built for students.

@@ -35,6 +35,9 @@ import PurchaseEntries from "./PurchaseEntries";
 import EnrollmentApprovals from "./EnrollmentApprovals";
 import Attributes from "./Attributes";
 import PortalRequestBook from "./PortalRequestBook";
+import CirculationDesk from "./CirculationDesk";
+import BrowseCatalog from "./BrowseCatalog";
+import Enroll from "./Enroll";
 
 const queryClient = new QueryClient();
 
@@ -45,8 +48,10 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          {/* Auth */}
+          {/* Public routes (no login required) */}
           <Route path="/login" element={<Login />} />
+          <Route path="/browse" element={<BrowseCatalog />} />
+          <Route path="/enroll" element={<Enroll />} />
 
           {/* Admin Routes (staff only) */}
           <Route element={<ProtectedRoute staffOnly />}>
@@ -61,6 +66,7 @@ const App = () => (
             <Route path="/users/:id" element={<UserDetails />} />
             <Route path="/loans" element={<Loans />} />
             <Route path="/loans/new" element={<PhysicalLoan />} />
+            <Route path="/circulation" element={<CirculationDesk />} />
             <Route path="/reservations" element={<Reservations />} />
             <Route path="/fines" element={<Fines />} />
             <Route path="/notifications" element={<Notifications />} />

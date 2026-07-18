@@ -50,16 +50,20 @@ function isOverdue(dueDate: string, status: string) {
   return status === "Active" && new Date(dueDate).getTime() < Date.now();
 }
 
+const YEAR_OPTIONS = Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - i);
+
 export default function Loans() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<string>("Active");
+  const [year, setYear] = useState<string>("All");
   const { toast } = useToast();
 
   const { data, isLoading, isError, error } = useIssues({
     page,
     pageSize: DEFAULT_PAGE_SIZE,
     ...(status !== "All" ? { status } : {}),
+    ...(year !== "All" ? { year } : {}),
     ...(search.trim() ? { seed: search.trim() } : {}),
   });
 
@@ -116,22 +120,43 @@ export default function Loans() {
               }}
             />
           </div>
-          <Select
-            value={status}
-            onValueChange={(value) => {
-              setStatus(value);
-              setPage(1);
-            }}
-          >
-            <SelectTrigger className="w-[160px]">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Active">Active</SelectItem>
-              <SelectItem value="Returned">Returned</SelectItem>
-              <SelectItem value="All">All</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="flex gap-2">
+            <Select
+              value={year}
+              onValueChange={(value) => {
+                setYear(value);
+                setPage(1);
+              }}
+            >
+              <SelectTrigger className="w-[130px]">
+                <SelectValue placeholder="Year" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="All">All Years</SelectItem>
+                {YEAR_OPTIONS.map((option) => (
+                  <SelectItem key={option} value={String(option)}>
+                    {option}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
+              value={status}
+              onValueChange={(value) => {
+                setStatus(value);
+                setPage(1);
+              }}
+            >
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Active">Active</SelectItem>
+                <SelectItem value="Returned">Returned</SelectItem>
+                <SelectItem value="All">All</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         {/* Loan Table */}

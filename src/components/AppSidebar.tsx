@@ -13,6 +13,7 @@ import {
   ShoppingCart,
   UserCheck,
   Tags,
+  ScanLine,
 } from "lucide-react";
 import {
   Sidebar,
@@ -53,6 +54,11 @@ const items = [
     title: "Physical Loan",
     url: "/loans/new",
     icon: Library,
+  },
+  {
+    title: "Circulation Desk",
+    url: "/circulation",
+    icon: ScanLine,
   },
   {
     title: "Reservations",

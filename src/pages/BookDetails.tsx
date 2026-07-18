@@ -35,6 +35,7 @@ import { resUrl } from "@/api/entities";
 import { useToast } from "@/hooks/use-toast";
 import EditBookDialog from "@/components/EditBookDialog";
 import CoverPhotosDialog from "@/components/CoverPhotosDialog";
+import CommentSection from "@/components/CommentSection";
 
 export default function BookDetails() {
   const { id } = useParams();
@@ -195,6 +196,7 @@ export default function BookDetails() {
                     <TabsTrigger value="overview" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent py-3 px-6">Overview</TabsTrigger>
                     <TabsTrigger value="issued" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent py-3 px-6">Issued</TabsTrigger>
                     <TabsTrigger value="reserved" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent py-3 px-6">Reserved</TabsTrigger>
+                    <TabsTrigger value="comments" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent py-3 px-6">Comments</TabsTrigger>
                   </TabsList>
                   <TabsContent value="overview" className="py-6 space-y-6">
                     <div className="grid grid-cols-2 gap-x-12 gap-y-4 text-sm">
@@ -283,6 +285,9 @@ export default function BookDetails() {
                         </div>
                       ))}
                     </div>
+                  </TabsContent>
+                  <TabsContent value="comments" className="py-6">
+                    <CommentSection bookInfoId={book.bookInfoId} showComposer canModerate />
                   </TabsContent>
                 </Tabs>
               </CardContent>

@@ -45,6 +45,7 @@ import {
   useOnlineBooks,
   useUpdateOnlineBook,
 } from "@/hooks/api/use-online-books";
+import { useBooks } from "@/hooks/api/use-books";
 import { DEFAULT_PAGE_SIZE } from "@/api/constants";
 import { OnlineBookType } from "@/api/entities";
 import { useToast } from "@/hooks/use-toast";
@@ -57,6 +58,14 @@ export default function OnlineBooks() {
   const [editing, setEditing] = useState<OnlineBookType | null>(null);
   const [toDelete, setToDelete] = useState<OnlineBookType | null>(null);
   const [form, setForm] = useState({ title: "", purchaseUrl: "", resourceUrl: "", bookInfoId: "" });
+  const [linkedTitle, setLinkedTitle] = useState("");
+  const [catalogSearch, setCatalogSearch] = useState("");
+
+  const catalogSeed = catalogSearch.trim();
+  const { data: catalogResults, isFetching: isSearchingCatalog } = useBooks(
+    { page: 1, pageSize: 6, seed: catalogSeed },
+    catalogSeed.length > 1,
+  );
 
   const { data, isLoading, isError, error } = useOnlineBooks({
     page,
@@ -68,6 +77,8 @@ export default function OnlineBooks() {
     toast({ title: "Online book added" });
     setAddOpen(false);
     setForm({ title: "", purchaseUrl: "", resourceUrl: "", bookInfoId: "" });
+    setLinkedTitle("");
+    setCatalogSearch("");
   });
   const { mutate: deleteOnlineBook, isPending: isDeleting } = useDeleteOnlineBook(() => {
     toast({ title: "Online book removed" });
@@ -158,13 +169,63 @@ export default function OnlineBooks() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="ob-bookinfoid">Linked Catalog Book ID (optional)</Label>
-                  <Input
-                    id="ob-bookinfoid"
-                    placeholder="bookInfoId"
-                    value={form.bookInfoId}
-                    onChange={(e) => setForm((prev) => ({ ...prev, bookInfoId: e.target.value }))}
-                  />
+                  <Label htmlFor="ob-catalog-search">Link a Catalog Book (optional)</Label>
+                  {form.bookInfoId ? (
+                    <div className="flex items-center justify-between rounded-lg border bg-muted/50 px-3 py-2 text-sm">
+                      <span className="font-medium">{linkedTitle || form.bookInfoId}</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-muted-foreground"
+                        onClick={() => {
+                          setForm((prev) => ({ ...prev, bookInfoId: "" }));
+                          setLinkedTitle("");
+                        }}
+                      >
+                        Clear
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      <Input
+                        id="ob-catalog-search"
+                        placeholder="Search the catalog by title..."
+                        value={catalogSearch}
+                        onChange={(e) => setCatalogSearch(e.target.value)}
+                      />
+                      {catalogSeed.length > 1 && (
+                        <div className="rounded-lg border divide-y max-h-44 overflow-y-auto">
+                          {isSearchingCatalog && (
+                            <div className="flex items-center gap-2 p-2 text-sm text-muted-foreground">
+                              <Loader2 className="h-4 w-4 animate-spin" /> Searching...
+                            </div>
+                          )}
+                          {!isSearchingCatalog && (catalogResults?.data ?? []).length === 0 && (
+                            <p className="p-2 text-sm text-muted-foreground">No matching books.</p>
+                          )}
+                          {(catalogResults?.data ?? []).map((catalogBook) => (
+                            <button
+                              key={catalogBook.bookInfoId}
+                              className="w-full p-2 text-left text-sm hover:bg-muted transition-colors"
+                              onClick={() => {
+                                setForm((prev) => ({ ...prev, bookInfoId: catalogBook.bookInfoId }));
+                                setLinkedTitle(catalogBook.title);
+                                setCatalogSearch("");
+                              }}
+                            >
+                              <span className="font-medium">{catalogBook.title}</span>
+                              <span className="block text-xs text-muted-foreground">
+                                {catalogBook.bookAuthors
+                                  ?.map((ba) => ba.author?.fullName)
+                                  .filter(Boolean)
+                                  .join(", ")}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="ob-purchase">Purchase URL</Label>

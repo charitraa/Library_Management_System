@@ -23,7 +23,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
   useDetailedRoles,
+  useRenewMembership,
   useUpdateAccountStatus,
   useUpdateUserRole,
   useUserOverview,
@@ -40,6 +52,7 @@ export default function UserDetails() {
   const { data: roles } = useDetailedRoles();
   const { mutate: updateRole, isPending: isUpdatingRole } = useUpdateUserRole();
   const { mutate: updateStatus, isPending: isUpdatingStatus } = useUpdateAccountStatus();
+  const { mutate: renewMembership, isPending: isRenewingMembership } = useRenewMembership();
 
   if (isLoading) {
     return (
@@ -166,6 +179,53 @@ export default function UserDetails() {
                     </SelectContent>
                   </Select>
                 </div>
+                <Separator />
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-full gap-2"
+                      disabled={isRenewingMembership}
+                    >
+                      {isRenewingMembership ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <CalendarCheck className="h-4 w-4" />
+                      )}
+                      Renew Membership
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Renew membership</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Extend {user.fullName}'s library membership by the validity period
+                        configured in the global rules?
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() =>
+                          renewMembership(
+                            { userId: user.userId },
+                            {
+                              onSuccess: () => toast({ title: "Membership renewed" }),
+                              onError: (err) =>
+                                toast({
+                                  title: "Failed to renew membership",
+                                  description: err.response?.data?.error ?? err.message,
+                                  variant: "destructive",
+                                }),
+                            },
+                          )
+                        }
+                      >
+                        Renew
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </CardContent>
               <CardFooter className="bg-muted/50 p-4 gap-2">
                 <Button

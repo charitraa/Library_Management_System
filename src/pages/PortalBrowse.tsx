@@ -8,21 +8,45 @@ import { Link } from "react-router-dom";
 import { useBooks } from "@/hooks/api/use-books";
 import { useGenres } from "@/hooks/api/use-attributes";
 import { resUrl } from "@/api/entities";
+import CatalogFilters, {
+  CatalogFilterValues,
+  EMPTY_CATALOG_FILTERS,
+} from "@/components/CatalogFilters";
 
 const PAGE_SIZE = 12;
+const FILTERS_STORAGE_KEY = "portal-browse-filters";
+
+function loadStoredFilters(): CatalogFilterValues {
+  try {
+    const stored = localStorage.getItem(FILTERS_STORAGE_KEY);
+    if (stored) return { ...EMPTY_CATALOG_FILTERS, ...JSON.parse(stored) };
+  } catch {
+    // Corrupt storage entry — fall back to defaults.
+  }
+  return EMPTY_CATALOG_FILTERS;
+}
 
 export default function PortalBrowse() {
   const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
-  const [genre, setGenre] = useState<string>("");
+  const [filters, setFilters] = useState<CatalogFilterValues>(loadStoredFilters);
+
+  const applyFilters = (next: CatalogFilterValues) => {
+    setFilters(next);
+    setPage(1);
+    localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify(next));
+  };
 
   const { data: genresData } = useGenres();
   const { data, isLoading, isError, error, isFetching } = useBooks({
     page,
     pageSize: PAGE_SIZE,
     ...(search ? { seed: search } : {}),
-    ...(genre ? { genre } : {}),
+    ...(filters.author ? { author: filters.author } : {}),
+    ...(filters.genre ? { genre: filters.genre } : {}),
+    ...(filters.publisher ? { publisher: filters.publisher } : {}),
+    ...(filters.keyword ? { keyword: filters.keyword } : {}),
   });
 
   const genres = (genresData?.data ?? []).slice(0, 6);
@@ -60,34 +84,31 @@ export default function PortalBrowse() {
           </Button>
         </div>
 
-        <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
-          <div className="flex bg-slate-100 p-1.5 rounded-2xl">
-            <button
-              className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${
-                genre === "" ? "bg-white text-primary shadow-sm" : "text-slate-500 hover:text-slate-900"
-              }`}
-              onClick={() => {
-                setGenre("");
-                setPage(1);
-              }}
-            >
-              All
-            </button>
-            {genres.map((g) => (
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
+            <div className="flex bg-slate-100 dark:bg-muted p-1.5 rounded-2xl">
               <button
-                key={g.genreId}
-                className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${
-                  genre === g.genre ? "bg-white text-primary shadow-sm" : "text-slate-500 hover:text-slate-900"
+                className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                  filters.genre === "" ? "bg-white dark:bg-background text-primary shadow-sm" : "text-slate-500 hover:text-slate-900 dark:hover:text-foreground"
                 }`}
-                onClick={() => {
-                  setGenre(g.genre);
-                  setPage(1);
-                }}
+                onClick={() => applyFilters({ ...filters, genre: "" })}
               >
-                {g.genre}
+                All
               </button>
-            ))}
+              {genres.map((g) => (
+                <button
+                  key={g.genreId}
+                  className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${
+                    filters.genre === g.genreId ? "bg-white dark:bg-background text-primary shadow-sm" : "text-slate-500 hover:text-slate-900 dark:hover:text-foreground"
+                  }`}
+                  onClick={() => applyFilters({ ...filters, genre: g.genreId! })}
+                >
+                  {g.genre}
+                </button>
+              ))}
+            </div>
           </div>
+          <CatalogFilters value={filters} onChange={applyFilters} />
         </div>
 
         {/* Book Grid */}

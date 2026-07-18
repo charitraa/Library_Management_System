@@ -56,6 +56,9 @@ export const bookSingleService = new APIClient<BookInfo>("/books");
 export const addBookService = new APIClient<unknown, FormData>("/books");
 export const bookDeleteService = new APIClient<unknown>("/books");
 export const bookTrackService = new APIClient<BookStatusResponse>("/books/track");
+/** PUT/DELETE books/:bookId/mark-reference toggles the reference-only flag on a copy. */
+export const markReferenceService = (bookId: string) =>
+  new APIClient<unknown, unknown>(`/books/${bookId}`);
 
 // ---------- Users (admin) ----------
 
